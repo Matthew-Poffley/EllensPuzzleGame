@@ -63,7 +63,6 @@
   .tools button:hover:not(:disabled) { background: #f6efdc; }
   .tools button.hint { border-color: var(--gold); background: #fff6d6; }
   .tools button.hint:hover:not(:disabled) { background: #ffedaa; }
-  .tools button[aria-expanded="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
 
   .msg { min-height: 1.5em; margin: 12px 2px 4px; text-align: center; color: var(--muted); font-size: .96rem; }
   .msg.err { color: #c43d4b; font-weight: 600; }
@@ -72,7 +71,6 @@
     display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; margin: 10px 0 6px;
     padding: 12px; background: #fff; border: 2px dashed var(--line); border-radius: 14px;
   }
-  .alphabet[hidden] { display: none; }
   .alphabet span {
     width: 2rem; height: 2.2rem; display: grid; place-items: center; border-radius: 8px;
     font-weight: 700; font-size: .95rem; background: #f3ecfd; color: var(--accent-deep);
@@ -166,7 +164,7 @@
     </form>
     <div class="msg" id="msg" aria-live="polite"></div>
 
-    <div class="alphabet" id="alphabet" hidden></div>
+    <div class="alphabet" id="alphabet"></div>
 
     <div class="edge-label">Earlier in the alphabet</div>
     <ol id="ladder"></ol>
@@ -176,7 +174,6 @@
     <div class="stats" id="stats"></div>
     <div class="tools">
       <button type="button" class="hint" id="reveal">Reveal a letter</button>
-      <button type="button" id="toggle-alpha" aria-expanded="false">Show alphabet</button>
       <button type="button" id="giveup">Give up</button>
       <button type="button" class="next" id="next" hidden>Next level →</button>
       <button type="button" id="history-btn">History</button>
@@ -400,19 +397,8 @@ function render(latest) {
 }
 
 const tokens = s => s.toLowerCase().replace(/['’]/g, "").split(/[^a-z0-9]+/).filter(Boolean);
-const tolerance = n => n <= 3 ? 0 : n <= 7 ? 1 : 2;
-
-function distance(a, b) {
-  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i++) {
-    const cur = [i];
-    for (let j = 1; j <= b.length; j++) {
-      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-    }
-    prev = cur;
-  }
-  return prev[b.length];
-}
+// Filler words that don't count as a guess on their own ("and" for "Horse and Cart").
+const FILLER = new Set(["and", "the", "of", "a", "an", "in", "on", "to", "for", "with", "at", "by"]);
 
 // Turns what the player typed into a list item. Returns {item} on a match,
 // {maybe: [...]} when several items fit equally well, or {} when nothing fits.
@@ -428,38 +414,15 @@ function resolveGuess(raw) {
     if (hit) return { item: hit };
   }
 
-  const tol = tolerance(key.length);
-  if (tol) {
-    let best = tol + 1, found = [];
-    for (const item of list) {
-      const n = norm(item);
-      if (Math.abs(n.length - key.length) > tol) continue;
-      const d = distance(n, key);
-      if (d > tol || d > best) continue;
-      if (d < best) { best = d; found = []; }
-      found.push(item);
-    }
-    if (found.length === 1) return { item: found[0] };
-    if (found.length > 1) return { maybe: found };
-  }
-
-  // Partial names: every word typed must match a word of the item, typos allowed.
-  const words = tokens(raw);
+  // Partial names: every word typed must be a whole word of the item.
+  const words = tokens(raw).filter(w => !FILLER.has(w));
   if (key.length >= 3 && words.length) {
-    const scored = [];
-    for (const item of list) {
-      const parts = tokens(item);
-      let total = 0;
-      const ok = words.every(w => {
-        const d = Math.min(...parts.map(p => distance(w, p)));
-        total += d;
-        return d <= tolerance(w.length);
-      });
-      if (ok) scored.push({ item, total, size: parts.length });
-    }
-    if (scored.length) {
-      const best = Math.min(...scored.map(s => s.total * 10 + s.size));
-      const top = scored.filter(s => s.total * 10 + s.size === best).map(s => s.item);
+    const found = list
+      .map(item => ({ item, parts: tokens(item) }))
+      .filter(({ parts }) => words.every(w => parts.includes(w)));
+    if (found.length) {
+      const fewest = Math.min(...found.map(f => f.parts.length));
+      const top = found.filter(f => f.parts.length === fewest).map(f => f.item);
       return top.length === 1 ? { item: top[0] } : { maybe: top };
     }
   }
@@ -500,13 +463,6 @@ $("reveal").addEventListener("click", () => {
   setMsg(`Revealed: the answer starts with "${revealedPrefix()}".`);
   render(null);
   $("guess").focus();
-});
-
-$("toggle-alpha").addEventListener("click", () => {
-  const box = $("alphabet");
-  box.hidden = !box.hidden;
-  $("toggle-alpha").textContent = box.hidden ? "Show alphabet" : "Hide alphabet";
-  $("toggle-alpha").setAttribute("aria-expanded", String(!box.hidden));
 });
 
 $("giveup").addEventListener("click", () => {
