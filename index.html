@@ -199,8 +199,9 @@ const byNorm = (a, b) => norm(a).localeCompare(norm(b));
 
 let level, category, answer, guesses, over, revealed;
 
-// Every player gets the same 100 levels: a fixed shuffle of the categories,
-// and a fixed answer per level, both driven by seeded random numbers.
+// Every player gets the same levels. Each category gets ROUNDS questions with
+// different answers; each round visits every category once, in a shuffled order,
+// before any category comes round again. Seeded random numbers keep it fixed.
 function seeded(seed) {
   return () => {
     seed = (seed + 0x6D2B79F5) | 0;
@@ -210,24 +211,38 @@ function seeded(seed) {
   };
 }
 
-const LEVEL_ORDER = (() => {
-  const rand = seeded(2024), order = Object.keys(PUZZLES);
-  for (let i = order.length - 1; i > 0; i--) {
+function shuffled(items, rand) {
+  const a = items.slice();
+  for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(rand() * (i + 1));
-    [order[i], order[j]] = [order[j], order[i]];
+    [a[i], a[j]] = [a[j], a[i]];
   }
-  return order;
+  return a;
+}
+
+const ROUNDS = 20;
+const LEVELS = (() => {
+  const cats = Object.keys(PUZZLES);
+  const answers = {};
+  cats.forEach((c, i) => { answers[c] = shuffled(PUZZLES[c], seeded(1000 + i * 131)).slice(0, ROUNDS); });
+  const levels = [];
+  let last = null;
+  for (let r = 0; r < ROUNDS; r++) {
+    const order = shuffled(cats, seeded(2024 + r * 977));
+    if (order[0] === last) [order[0], order[1]] = [order[1], order[0]];
+    order.forEach(c => levels.push({ category: c, answer: answers[c][r] }));
+    last = order[order.length - 1];
+  }
+  return levels;
 })();
-const TOTAL_LEVELS = LEVEL_ORDER.length;
+const TOTAL_LEVELS = LEVELS.length;
 
 function levelPuzzle(n) {
-  const cat = LEVEL_ORDER[n - 1];
-  const list = PUZZLES[cat];
-  return { category: cat, answer: list[Math.floor(seeded(n * 7919)() * list.length)] };
+  return LEVELS[n - 1];
 }
 
 // Progress lives in this browser's localStorage.
-const STORE_KEY = "alphabetLadder.v1";
+const STORE_KEY = "alphabetLadder.v2";
 let save = loadSave();
 
 function loadSave() {
