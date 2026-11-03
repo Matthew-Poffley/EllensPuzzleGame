@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Alphabet Ladder</title>
+<style>
+  :root {
+    --bg1: #1b1445; --bg2: #3a1d6e;
+    --paper: #fffaf0; --ink: #231a3d; --muted: #7d7396; --line: #eadfc8;
+    --above: #0f9d8a; --above-soft: #dcf5ef;
+    --below: #e8602c; --below-soft: #fde6dc;
+    --gold: #ffc533; --gold-deep: #e29a00;
+    --accent: #6c4cf5; --accent-deep: #4f33cc;
+    --win: #25a55f;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; color: var(--ink);
+    font-family: "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+    background: radial-gradient(circle at 20% 0%, var(--bg2), var(--bg1) 70%) fixed;
+    display: flex; justify-content: center; padding: 28px 16px 48px;
+  }
+  main { width: 100%; max-width: 560px; }
+
+  header { text-align: center; color: #fff; margin-bottom: 18px; }
+  h1 { margin: 0; font-size: clamp(2rem, 7vw, 2.8rem); letter-spacing: 1px; text-transform: uppercase; }
+  h1 span { color: var(--gold); }
+  .sub { margin: 6px 0 0; color: #cfc6f5; font-size: .98rem; }
+
+  .card {
+    background: var(--paper); border-radius: 22px; padding: 22px 20px 20px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, .35);
+  }
+  .category {
+    text-align: center; margin-bottom: 18px; padding: 12px 10px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-deep));
+    border-radius: 16px; color: #fff;
+  }
+  .category small { display: block; opacity: .8; text-transform: uppercase; letter-spacing: 2px; font-size: .68rem; }
+  .category strong { font-size: clamp(1.25rem, 5vw, 1.7rem); }
+
+  form { display: flex; gap: 8px; }
+  input[type=text] {
+    flex: 1; min-width: 0; padding: 13px 15px; font-size: 1.05rem; font-family: inherit;
+    border: 2px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); outline: none;
+  }
+  input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(108, 76, 245, .15); }
+  button {
+    font-family: inherit; font-size: 1rem; cursor: pointer; border: 0; border-radius: 12px;
+    padding: 13px 20px; font-weight: 700; background: var(--accent); color: #fff;
+    transition: transform .08s, background .15s;
+  }
+  button:hover:not(:disabled) { background: var(--accent-deep); }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .tools { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 18px; }
+  .tools button {
+    background: #fff; color: var(--ink); border: 2px solid var(--line);
+    padding: 9px 14px; font-size: .9rem; font-weight: 600;
+  }
+  .tools button:hover:not(:disabled) { background: #f6efdc; }
+  .tools button.hint { border-color: var(--gold); background: #fff6d6; }
+  .tools button.hint:hover:not(:disabled) { background: #ffedaa; }
+  .tools button[aria-expanded="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+  .msg { min-height: 1.5em; margin: 12px 2px 4px; text-align: center; color: var(--muted); font-size: .96rem; }
+  .msg.err { color: #c43d4b; font-weight: 600; }
+
+  .alphabet {
+    display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; margin: 10px 0 6px;
+    padding: 12px; background: #fff; border: 2px dashed var(--line); border-radius: 14px;
+  }
+  .alphabet[hidden] { display: none; }
+  .alphabet span {
+    width: 2rem; height: 2.2rem; display: grid; place-items: center; border-radius: 8px;
+    font-weight: 700; font-size: .95rem; background: #f3ecfd; color: var(--accent-deep);
+    transition: opacity .2s;
+  }
+  .alphabet span.out { opacity: .22; background: transparent; }
+  .alphabet span.edge { background: var(--gold); color: var(--ink); }
+  .alphabet-note { flex-basis: 100%; text-align: center; font-size: .75rem; color: var(--muted); margin-top: 4px; }
+
+  .edge-label {
+    display: flex; align-items: center; gap: 10px; margin: 16px 0 4px;
+    font-size: .72rem; text-transform: uppercase; letter-spacing: 1.6px; color: var(--muted);
+  }
+  .edge-label::before, .edge-label::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+
+  ol { list-style: none; margin: 0; padding: 0; }
+  li {
+    padding: 11px 16px; margin: 6px 0; border-radius: 12px; font-size: 1.02rem;
+    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+    border: 2px solid transparent;
+  }
+  li.above { background: var(--above-soft); color: #0a5c51; }
+  li.below { background: var(--below-soft); color: #8f3410; }
+  li .side { display: flex; align-items: center; gap: 10px; }
+  li .count {
+    min-width: 2.2rem; text-align: center; padding: 2px 9px; border-radius: 999px;
+    font-size: .85rem; font-weight: 700; background: rgba(255, 255, 255, .75);
+  }
+  li .arrow { font-size: 1.15rem; font-weight: 700; }
+  li.above .arrow { color: var(--above); }
+  li.below .arrow { color: var(--below); }
+  li.latest { border-color: currentColor; font-weight: 700; animation: pop .3s ease-out; }
+  li.answer {
+    justify-content: center; margin: 12px 0; padding: 16px; font-size: 1.25rem; font-weight: 800;
+    letter-spacing: 3px; color: var(--ink);
+    background: linear-gradient(135deg, var(--gold), #ffdd75); border-color: var(--gold-deep);
+    box-shadow: 0 4px 0 var(--gold-deep);
+  }
+  li.answer.won { background: var(--win); border-color: #187a45; box-shadow: 0 4px 0 #187a45; color: #fff; }
+  li.answer.lost { background: #e9e2f8; border-color: #bdb0e6; box-shadow: 0 4px 0 #bdb0e6; letter-spacing: 1px; }
+  @keyframes pop { from { transform: scale(.94); opacity: .4; } to { transform: scale(1); opacity: 1; } }
+
+  .legend { text-align: center; font-size: .75rem; color: var(--muted); margin: 6px 0 0; }
+  .stats { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 14px; }
+
+  @media (max-width: 420px) {
+    .card { padding: 16px 12px; }
+    .alphabet span { width: 1.75rem; height: 2rem; }
+  }
+  @media (prefers-reduced-motion: reduce) { li.latest { animation: none; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>Alphabet <span>Ladder</span></h1>
+    <p class="sub">Guess the hidden answer. Every guess lands above or below it, alphabetically.</p>
+  </header>
+
+  <div class="card">
+    <div class="category"><small>Category</small><strong id="category"></strong></div>
+
+    <form id="form" autocomplete="off">
+      <input type="text" id="guess" placeholder="Type your guess…" aria-label="Your guess" autofocus>
+      <button type="submit" id="go">Guess</button>
+    </form>
+    <div class="msg" id="msg" aria-live="polite"></div>
+
+    <div class="alphabet" id="alphabet" hidden></div>
+
+    <div class="edge-label">Earlier in the alphabet</div>
+    <ol id="ladder"></ol>
+    <div class="edge-label">Later in the alphabet</div>
+    <p class="legend">The number on each guess is how many places it is from the answer in the category's alphabetical list (1 = right next to it).</p>
+
+    <div class="stats" id="stats"></div>
+    <div class="tools">
+      <button type="button" class="hint" id="reveal">Reveal a letter</button>
+      <button type="button" id="toggle-alpha" aria-expanded="false">Show alphabet</button>
+      <button type="button" id="giveup">Give up</button>
+      <button type="button" id="new">New puzzle</button>
+    </div>
+  </div>
+</main>
+
+<script src="puzzles.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+const byNorm = (a, b) => norm(a).localeCompare(norm(b));
+
+let category, answer, guesses, over, revealed;
+
+function newGame() {
+  const cats = Object.keys(PUZZLES);
+  category = cats[Math.floor(Math.random() * cats.length)];
+  const list = PUZZLES[category];
+  answer = list[Math.floor(Math.random() * list.length)];
+  guesses = [];
+  revealed = 0;
+  over = false;
+  $("category").textContent = category;
+  $("guess").disabled = $("go").disabled = false;
+  $("guess").value = "";
+  setMsg("");
+  render(null);
+  $("guess").focus();
+}
+
+function setMsg(text, err) {
+  $("msg").textContent = text;
+  $("msg").className = "msg" + (err ? " err" : "");
+}
+
+function endGame(won) {
+  over = true;
+  $("guess").disabled = $("go").disabled = true;
+  $("reveal").disabled = true;
+  return won;
+}
+
+// The answer's first `revealed` letters/digits, with spaces and punctuation kept.
+function revealedPrefix() {
+  let shown = "", count = 0;
+  for (const ch of answer) {
+    if (count === revealed) break;
+    shown += ch;
+    if (/[a-z0-9]/i.test(ch)) count++;
+  }
+  return shown.trimEnd();
+}
+
+function maxReveals() {
+  return norm(answer).length - 1;
+}
+
+function guessesAround() {
+  const key = norm(answer);
+  const above = guesses.filter(g => norm(g) < key).sort(byNorm);
+  const below = guesses.filter(g => norm(g) > key).sort(byNorm);
+  return { above, below };
+}
+
+function renderAlphabet(above, below) {
+  const box = $("alphabet");
+  let lo = "a", hi = "z", note = "Gold letters mark the first letters of your closest guesses.";
+  const edgeLetters = new Set();
+  if (above.length) { lo = norm(above.at(-1))[0]; edgeLetters.add(lo); }
+  if (below.length) { hi = norm(below[0])[0]; edgeLetters.add(hi); }
+  if (revealed >= 1) {
+    lo = hi = norm(answer)[0];
+    edgeLetters.clear(); edgeLetters.add(lo);
+    note = "The first letter is revealed.";
+  }
+  box.innerHTML = "";
+  for (const L of "abcdefghijklmnopqrstuvwxyz") {
+    const s = document.createElement("span");
+    s.textContent = L.toUpperCase();
+    if (L < lo || L > hi) s.className = "out";
+    else if (edgeLetters.has(L)) s.className = "edge";
+    box.append(s);
+  }
+  const n = document.createElement("div");
+  n.className = "alphabet-note";
+  n.textContent = "Faded letters can't start the answer. " + note;
+  box.append(n);
+}
+
+function render(latest) {
+  const { above, below } = guessesAround();
+  const ol = $("ladder");
+  ol.innerHTML = "";
+
+  // Arrows point toward the answer in the middle.
+  const sorted = PUZZLES[category].slice().sort(byNorm);
+  const answerPos = sorted.indexOf(answer);
+  const addGuess = (g, cls, arrow) => {
+    const li = document.createElement("li");
+    li.className = cls + (g === latest ? " latest" : "");
+    li.append(document.createTextNode(g));
+    const side = document.createElement("span");
+    side.className = "side";
+    // How many places down the category's list this guess is from the answer.
+    const steps = Math.abs(sorted.indexOf(g) - answerPos);
+    const n = document.createElement("span");
+    n.className = "count";
+    n.textContent = steps;
+    n.title = `${steps} place${steps === 1 ? "" : "s"} from the answer in the list`;
+    const a = document.createElement("span");
+    a.className = "arrow"; a.textContent = arrow; a.setAttribute("aria-hidden", "true");
+    side.append(n, a);
+    li.append(side);
+    ol.append(li);
+  };
+  above.forEach(g => addGuess(g, "above", "▼"));
+
+  const mid = document.createElement("li");
+  const won = over && guesses.some(g => norm(g) === norm(answer));
+  mid.className = "answer" + (won ? " won" : over ? " lost" : "");
+  mid.textContent = over ? answer : revealed ? revealedPrefix() + " …" : "? ? ?";
+  ol.append(mid);
+
+  below.forEach(g => addGuess(g, "below", "▲"));
+
+  const parts = [];
+  parts.push(guesses.length ? `${guesses.length} guess${guesses.length === 1 ? "" : "es"}` : "Make your first guess!");
+  if (revealed) parts.push(`${revealed} letter${revealed === 1 ? "" : "s"} revealed`);
+  $("stats").textContent = parts.join(" · ");
+
+  $("reveal").disabled = over || revealed >= maxReveals();
+  renderAlphabet(above, below);
+}
+
+const tokens = s => s.toLowerCase().replace(/['’]/g, "").split(/[^a-z0-9]+/).filter(Boolean);
+const tolerance = n => n <= 3 ? 0 : n <= 7 ? 1 : 2;
+
+function distance(a, b) {
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+// Turns what the player typed into a list item. Returns {item} on a match,
+// {maybe: [...]} when several items fit equally well, or {} when nothing fits.
+function resolveGuess(raw) {
+  const list = PUZZLES[category];
+  const key = norm(raw);
+  const byKey = new Map(list.map(i => [norm(i), i]));
+  if (byKey.has(key)) return { item: byKey.get(key) };
+
+  for (const group of SYNONYMS) {
+    if (!group.some(n => norm(n) === key)) continue;
+    const hit = group.map(n => byKey.get(norm(n))).find(Boolean);
+    if (hit) return { item: hit };
+  }
+
+  const tol = tolerance(key.length);
+  if (tol) {
+    let best = tol + 1, found = [];
+    for (const item of list) {
+      const n = norm(item);
+      if (Math.abs(n.length - key.length) > tol) continue;
+      const d = distance(n, key);
+      if (d > tol || d > best) continue;
+      if (d < best) { best = d; found = []; }
+      found.push(item);
+    }
+    if (found.length === 1) return { item: found[0] };
+    if (found.length > 1) return { maybe: found };
+  }
+
+  // Partial names: every word typed must match a word of the item, typos allowed.
+  const words = tokens(raw);
+  if (key.length >= 3 && words.length) {
+    const scored = [];
+    for (const item of list) {
+      const parts = tokens(item);
+      let total = 0;
+      const ok = words.every(w => {
+        const d = Math.min(...parts.map(p => distance(w, p)));
+        total += d;
+        return d <= tolerance(w.length);
+      });
+      if (ok) scored.push({ item, total, size: parts.length });
+    }
+    if (scored.length) {
+      const best = Math.min(...scored.map(s => s.total * 10 + s.size));
+      const top = scored.filter(s => s.total * 10 + s.size === best).map(s => s.item);
+      return top.length === 1 ? { item: top[0] } : { maybe: top };
+    }
+  }
+  return {};
+}
+
+$("form").addEventListener("submit", e => {
+  e.preventDefault();
+  if (over) return;
+  const raw = $("guess").value.trim().replace(/\s+/g, " ");
+  if (!norm(raw)) return setMsg("Type a guess first.", true);
+  const match = resolveGuess(raw);
+  if (match.maybe) {
+    const names = match.maybe.slice(0, 4).map(n => `"${n}"`);
+    return setMsg(`Did you mean ${names.slice(0, -1).join(", ")}${names.length > 1 ? " or " : ""}${names.at(-1)}?`, true);
+  }
+  if (!match.item) return setMsg(`"${raw}" isn't in this category's list. Try another guess.`, true);
+  const item = match.item;
+  if (guesses.some(g => norm(g) === norm(item))) return setMsg(`You already guessed "${item}".`, true);
+  const note = norm(item) === norm(raw) ? "" : `Counting "${raw}" as ${item}. `;
+  guesses.push(item);
+  $("guess").value = "";
+  if (norm(item) === norm(answer)) {
+    endGame(true);
+    setMsg(`${note}🎉 Got it in ${guesses.length}! It was ${answer}.`);
+    render(item);
+    return;
+  }
+  setMsg(`${note}"${item}" comes ${norm(item) < norm(answer) ? "BEFORE" : "AFTER"} the answer.`);
+  render(item);
+});
+
+$("reveal").addEventListener("click", () => {
+  if (over || revealed >= maxReveals()) return;
+  revealed++;
+  setMsg(`Revealed: the answer starts with "${revealedPrefix()}".`);
+  render(null);
+  $("guess").focus();
+});
+
+$("toggle-alpha").addEventListener("click", () => {
+  const box = $("alphabet");
+  box.hidden = !box.hidden;
+  $("toggle-alpha").textContent = box.hidden ? "Show alphabet" : "Hide alphabet";
+  $("toggle-alpha").setAttribute("aria-expanded", String(!box.hidden));
+});
+
+$("giveup").addEventListener("click", () => {
+  if (over) return;
+  endGame(false);
+  setMsg(`The answer was ${answer}.`);
+  render(null);
+});
+
+$("new").addEventListener("click", newGame);
+newGame();
+</script>
+</body>
+</html>
