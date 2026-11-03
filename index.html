@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Alphabet Ladder</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%236c4cf5'/%3E%3Cg stroke='%23ffc533' stroke-width='5' stroke-linecap='round'%3E%3Cpath d='M20 10v44M44 10v44M20 20h24M20 32h24M20 44h24'/%3E%3C/g%3E%3C/svg%3E">
 <style>
   :root {
     --bg1: #1b1445; --bg2: #3a1d6e;
@@ -114,6 +115,31 @@
   li.answer.lost { background: #e9e2f8; border-color: #bdb0e6; box-shadow: 0 4px 0 #bdb0e6; letter-spacing: 1px; }
   @keyframes pop { from { transform: scale(.94); opacity: .4; } to { transform: scale(1); opacity: 1; } }
 
+  .category #levelLabel { color: var(--gold); opacity: 1; font-weight: 700; margin-bottom: 4px; font-size: .78rem; }
+  .tools button.next { background: var(--win); color: #fff; border-color: var(--win); }
+  .tools button.next:hover:not(:disabled) { background: #1c8a4e; }
+
+  dialog {
+    width: min(92vw, 520px); max-height: 85vh; padding: 20px; border: 0; border-radius: 20px;
+    background: var(--paper); color: var(--ink); font-family: inherit; overflow: auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, .45);
+  }
+  dialog::backdrop { background: rgba(20, 12, 50, .65); }
+  .dlg-head { display: flex; justify-content: space-between; align-items: center; }
+  .dlg-head h2 { margin: 0; font-size: 1.4rem; }
+  .dlg-head .x { background: transparent; color: var(--muted); padding: 4px 10px; font-size: 1.1rem; }
+  .dlg-head .x:hover:not(:disabled) { background: var(--line); }
+  .dlg-summary { color: var(--muted); font-size: .9rem; margin: 6px 0 12px; }
+  .entry { border-radius: 12px; margin: 6px 0; border: 2px solid var(--line); background: #fff; }
+  .entry.won { border-color: #bfe6d1; }
+  .entry.lost { border-color: #f1c9b8; }
+  .entry.playing { border-color: var(--gold); }
+  .entry summary { padding: 10px 14px; cursor: pointer; font-weight: 600; font-size: .95rem; }
+  .entry-body { padding: 0 14px 6px; color: var(--muted); font-size: .85rem; }
+  .entry ol { padding: 0 14px 12px 36px; margin: 0; list-style: decimal; }
+  .entry ol li { display: list-item; padding: 2px 0; margin: 0; background: none; border: 0; font-size: .92rem; }
+  .reset { margin-top: 14px; width: 100%; background: transparent; color: #c43d4b; border: 2px solid #f0c3c8; }
+  .reset:hover:not(:disabled) { background: #fdeef0; }
   .legend { text-align: center; font-size: .75rem; color: var(--muted); margin: 6px 0 0; }
   .stats { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 14px; }
 
@@ -132,7 +158,7 @@
   </header>
 
   <div class="card">
-    <div class="category"><small>Category</small><strong id="category"></strong></div>
+    <div class="category"><small id="levelLabel"></small><small>Category</small><strong id="category"></strong></div>
 
     <form id="form" autocomplete="off">
       <input type="text" id="guess" placeholder="Type your guess…" aria-label="Your guess" autofocus>
@@ -152,9 +178,17 @@
       <button type="button" class="hint" id="reveal">Reveal a letter</button>
       <button type="button" id="toggle-alpha" aria-expanded="false">Show alphabet</button>
       <button type="button" id="giveup">Give up</button>
-      <button type="button" id="new">New puzzle</button>
+      <button type="button" class="next" id="next" hidden>Next level →</button>
+      <button type="button" id="history-btn">History</button>
     </div>
   </div>
+
+  <dialog id="history">
+    <div class="dlg-head"><h2>History</h2><button type="button" class="x" id="close-history" aria-label="Close history">✕</button></div>
+    <p class="dlg-summary" id="history-summary"></p>
+    <div id="history-list"></div>
+    <button type="button" class="reset" id="reset">Reset progress</button>
+  </dialog>
 </main>
 
 <script src="puzzles.js"></script>
@@ -163,22 +197,81 @@ const $ = id => document.getElementById(id);
 const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 const byNorm = (a, b) => norm(a).localeCompare(norm(b));
 
-let category, answer, guesses, over, revealed;
+let level, category, answer, guesses, over, revealed;
 
-function newGame() {
-  const cats = Object.keys(PUZZLES);
-  category = cats[Math.floor(Math.random() * cats.length)];
-  const list = PUZZLES[category];
-  answer = list[Math.floor(Math.random() * list.length)];
+// Every player gets the same 100 levels: a fixed shuffle of the categories,
+// and a fixed answer per level, both driven by seeded random numbers.
+function seeded(seed) {
+  return () => {
+    seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const LEVEL_ORDER = (() => {
+  const rand = seeded(2024), order = Object.keys(PUZZLES);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  return order;
+})();
+const TOTAL_LEVELS = LEVEL_ORDER.length;
+
+function levelPuzzle(n) {
+  const cat = LEVEL_ORDER[n - 1];
+  const list = PUZZLES[cat];
+  return { category: cat, answer: list[Math.floor(seeded(n * 7919)() * list.length)] };
+}
+
+// Progress lives in this browser's localStorage.
+const STORE_KEY = "alphabetLadder.v1";
+let save = loadSave();
+
+function loadSave() {
+  try {
+    const s = JSON.parse(localStorage.getItem(STORE_KEY));
+    if (s && Number.isInteger(s.level) && s.level >= 1 && Array.isArray(s.history)) return s;
+  } catch (e) { /* storage blocked or corrupt: start fresh */ }
+  return { level: 1, current: null, history: [] };
+}
+
+function persist() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(save)); } catch (e) { /* storage unavailable */ }
+}
+
+function saveCurrent() {
+  save.current = { level, guesses, revealed, over };
+  persist();
+}
+
+function startLevel(n) {
+  level = Math.min(Math.max(n, 1), TOTAL_LEVELS);
+  ({ category, answer } = levelPuzzle(level));
   guesses = [];
   revealed = 0;
   over = false;
+  const saved = save.current && save.current.level === level ? save.current : null;
+  if (saved) {
+    const valid = new Set(PUZZLES[category].map(norm));
+    guesses = (saved.guesses || []).filter(g => valid.has(norm(g)));
+    revealed = Math.min(Math.max(saved.revealed | 0, 0), maxReveals());
+    over = !!saved.over;
+  }
+  $("levelLabel").textContent = `Level ${level} of ${TOTAL_LEVELS}`;
   $("category").textContent = category;
-  $("guess").disabled = $("go").disabled = false;
+  $("guess").disabled = $("go").disabled = over;
   $("guess").value = "";
-  setMsg("");
+  if (over) {
+    const won = guesses.some(g => norm(g) === norm(answer));
+    setMsg(won ? `Solved in ${guesses.length}! It was ${answer}.` : `The answer was ${answer}.`);
+  } else {
+    setMsg(saved && guesses.length ? "Welcome back! Your guesses are still here." : "");
+  }
   render(null);
-  $("guess").focus();
+  if (!over) $("guess").focus();
 }
 
 function setMsg(text, err) {
@@ -190,7 +283,9 @@ function endGame(won) {
   over = true;
   $("guess").disabled = $("go").disabled = true;
   $("reveal").disabled = true;
-  return won;
+  save.history = save.history.filter(h => h.level !== level);
+  save.history.push({ level, category, answer, won, guesses: guesses.slice(), revealed, finishedAt: Date.now() });
+  saveCurrent();
 }
 
 // The answer's first `revealed` letters/digits, with spaces and punctuation kept.
@@ -282,6 +377,10 @@ function render(latest) {
   $("stats").textContent = parts.join(" · ");
 
   $("reveal").disabled = over || revealed >= maxReveals();
+  $("giveup").hidden = over;
+  $("next").hidden = !over;
+  $("next").disabled = level >= TOTAL_LEVELS;
+  $("next").textContent = level >= TOTAL_LEVELS ? "All levels complete 🎉" : "Next level →";
   renderAlphabet(above, below);
 }
 
@@ -367,6 +466,7 @@ $("form").addEventListener("submit", e => {
   if (guesses.some(g => norm(g) === norm(item))) return setMsg(`You already guessed "${item}".`, true);
   const note = norm(item) === norm(raw) ? "" : `Counting "${raw}" as ${item}. `;
   guesses.push(item);
+  saveCurrent();
   $("guess").value = "";
   if (norm(item) === norm(answer)) {
     endGame(true);
@@ -381,6 +481,7 @@ $("form").addEventListener("submit", e => {
 $("reveal").addEventListener("click", () => {
   if (over || revealed >= maxReveals()) return;
   revealed++;
+  saveCurrent();
   setMsg(`Revealed: the answer starts with "${revealedPrefix()}".`);
   render(null);
   $("guess").focus();
@@ -400,8 +501,67 @@ $("giveup").addEventListener("click", () => {
   render(null);
 });
 
-$("new").addEventListener("click", newGame);
-newGame();
+$("next").addEventListener("click", () => {
+  if (!over || level >= TOTAL_LEVELS) return;
+  save.level = level + 1;
+  save.current = null;
+  persist();
+  startLevel(save.level);
+});
+
+function renderHistory() {
+  const rows = save.history.slice().sort((a, b) => b.level - a.level);
+  const won = rows.filter(r => r.won);
+  const avg = won.length ? (won.reduce((s, r) => s + r.guesses.length, 0) / won.length).toFixed(1) : "–";
+  $("history-summary").textContent = rows.length
+    ? `${won.length} of ${rows.length} level${rows.length === 1 ? "" : "s"} solved · average ${avg} guesses per solve`
+    : "No finished levels yet.";
+  const list = $("history-list");
+  list.innerHTML = "";
+  const add = (title, cls, answerText, guessList, extra) => {
+    const d = document.createElement("details");
+    d.className = "entry " + cls;
+    const s = document.createElement("summary");
+    s.textContent = title;
+    d.append(s);
+    const body = document.createElement("div");
+    body.className = "entry-body";
+    body.textContent = `${answerText}${extra}`;
+    const ol2 = document.createElement("ol");
+    guessList.forEach(g => {
+      const li = document.createElement("li");
+      li.textContent = g;
+      ol2.append(li);
+    });
+    d.append(body, ol2);
+    list.append(d);
+  };
+  if (!over && guesses.length) {
+    add(`Level ${level} · ${category} · in progress`, "playing", "Still going. ", guesses, ` ${guesses.length} guess${guesses.length === 1 ? "" : "es"} so far.`);
+  }
+  for (const r of rows) {
+    const n = r.guesses.length;
+    add(`Level ${r.level} · ${r.category} · ${r.won ? `solved in ${n}` : "gave up"}`, r.won ? "won" : "lost",
+      `Answer: ${r.answer}.`, r.guesses,
+      ` ${n} guess${n === 1 ? "" : "es"}${r.revealed ? `, ${r.revealed} letter${r.revealed === 1 ? "" : "s"} revealed` : ""}.`);
+  }
+}
+
+$("history-btn").addEventListener("click", () => {
+  renderHistory();
+  $("history").showModal();
+});
+$("close-history").addEventListener("click", () => $("history").close());
+$("history").addEventListener("click", e => { if (e.target === $("history")) $("history").close(); });
+$("reset").addEventListener("click", () => {
+  if (!confirm("Reset all progress and history in this browser? This can't be undone.")) return;
+  save = { level: 1, current: null, history: [] };
+  persist();
+  $("history").close();
+  startLevel(1);
+});
+
+startLevel(save.level);
 </script>
 </body>
 </html>
