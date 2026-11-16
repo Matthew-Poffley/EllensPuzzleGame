@@ -153,6 +153,9 @@
   .dym-none { margin-top: 10px; width: 100%; background: transparent; color: var(--ink); border: 2px solid var(--line); }
   .dym-none:hover:not(:disabled) { background: #f6efdc; }
   .legend { text-align: center; font-size: .75rem; color: var(--muted); margin: 6px 0 0; }
+  .new-list { margin: 0 0 16px; padding-left: 20px; font-size: .95rem; line-height: 1.45; }
+  .new-list li { display: list-item; padding: 3px 0; margin: 0; background: none; border: 0; }
+  #new-ok { width: 100%; }
   .sync { text-align: center; font-size: .75rem; color: var(--muted); margin-top: 4px; min-height: 1.1em; }
   .sync[data-state="offline"] { color: #c43d4b; }
   .acct p { color: var(--muted); font-size: .9rem; margin: 8px 0; }
@@ -198,6 +201,7 @@
       <button type="button" class="hint" id="reveal">Reveal a letter</button>
       <button type="button" id="giveup">Give up</button>
       <button type="button" class="next" id="next" hidden>Next level →</button>
+      <button type="button" id="share" hidden>📋 Share result</button>
       <button type="button" id="history-btn">History</button>
       <button type="button" id="acct-btn">☁ Back up my progress</button>
       <button type="button" id="sound-btn" aria-pressed="true">🔊 Sound on</button>
@@ -209,6 +213,20 @@
     <p class="dlg-summary" id="dym-text"></p>
     <div class="dym-options" id="dym-options"></div>
     <button type="button" class="dym-none" id="dym-none">None of these</button>
+  </dialog>
+
+  <dialog id="whatsnew">
+    <div class="dlg-head"><h2>What's new</h2><button type="button" class="x" id="close-new" aria-label="Close">✕</button></div>
+    <p class="dlg-summary">Your progress is safe: everything you've already played is exactly as you left it.</p>
+    <ul class="new-list">
+      <li><b>Answer rank.</b> Each puzzle now shows how well-known its answer is: Common, Obscure, Niche or Extremely Esoteric.</li>
+      <li><b>"Did you mean" pop-up.</b> A near-miss now asks you to pick what you meant, and never fills it in for you.</li>
+      <li><b>Celebrations.</b> A trumpet fanfare and confetti when you get it right (bigger for harder answers), and a sad trombone if you give up. Use the Sound button to turn sound off.</li>
+      <li><b>Share your result.</b> When a puzzle ends, tap "Share result" for a spoiler-free summary to send to friends.</li>
+      <li><b>Tidier lists.</b> We trimmed the very obscure items and retired a few categories.</li>
+      <li><b>Back up your progress.</b> Add your email with the "☁ Back up my progress" button to keep your progress across devices.</li>
+    </ul>
+    <button type="button" id="new-ok">Got it</button>
   </dialog>
 
   <dialog id="acct" class="acct">
@@ -456,6 +474,7 @@ function render(latest) {
   $("reveal").disabled = over || revealed >= maxReveals();
   $("giveup").hidden = over;
   $("next").hidden = !over;
+  $("share").hidden = !over;
   const more = nextActive(level + 1) !== null;
   $("next").disabled = !more;
   $("next").textContent = more ? "Next level →" : "All levels complete 🎉";
@@ -767,6 +786,37 @@ function renderHistory() {
   }
 }
 
+// Spoiler-free result for sharing: never includes the answer. Each guess is a
+// square: blue = it came before the answer, orange = after.
+function shareText() {
+  const won = guesses.some(g => norm(g) === norm(answer));
+  const rank = tierOf(category, answer);
+  const head = `Alphabet Ladder${isRetired(level) ? "" : ` · Level ${displayNum(level)}`}${rank ? ` (${rank})` : ""}`;
+  const squares = guesses.map(g => norm(g) === norm(answer) ? "✅" : norm(g) < norm(answer) ? "🟦" : "🟧").join("");
+  const n = guesses.length;
+  const result = won ? `Solved in ${n} guess${n === 1 ? "" : "es"}` : `Gave up after ${n} guess${n === 1 ? "" : "es"}`;
+  const hint = revealed ? `\n💡 ${revealed} letter${revealed === 1 ? "" : "s"} revealed` : "";
+  return `${head}\n${squares || "🏳️"}\n${result}${hint}\n${location.origin === "null" ? "" : location.origin + location.pathname}`.trim();
+}
+
+$("share").addEventListener("click", async () => {
+  if (!over) return;
+  const text = shareText();
+  try {
+    if (navigator.share) { await navigator.share({ text }); return; }
+  } catch (e) {
+    if (e && e.name === "AbortError") return; // player closed the share sheet
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    $("share").textContent = "✅ Copied!";
+  } catch (e) {
+    prompt("Copy your result:", text);
+    return;
+  }
+  setTimeout(() => { $("share").textContent = "📋 Share result"; }, 2000);
+});
+
 function showSound() {
   $("sound-btn").textContent = soundOn ? "🔊 Sound on" : "🔇 Sound off";
   $("sound-btn").setAttribute("aria-pressed", String(soundOn));
@@ -865,6 +915,23 @@ document.addEventListener("visibilitychange", () => {
 });
 
 startLevel(save.level);
+
+// "What's new": shown once per update. Bump WHATS_NEW_VERSION to show it again.
+// Stored under its own key, so it can never touch a player's progress.
+const WHATS_NEW_VERSION = "2026-11-16";
+const WHATS_NEW_KEY = "alphabetLadder.seenUpdate";
+function closeWhatsNew() {
+  try { localStorage.setItem(WHATS_NEW_KEY, WHATS_NEW_VERSION); } catch (e) { /* shown again next visit */ }
+  $("whatsnew").close();
+  if (!over) $("guess").focus();
+}
+$("close-new").addEventListener("click", closeWhatsNew);
+$("new-ok").addEventListener("click", closeWhatsNew);
+// Pressing Esc counts as seen too.
+$("whatsnew").addEventListener("cancel", () => { try { localStorage.setItem(WHATS_NEW_KEY, WHATS_NEW_VERSION); } catch (e) { /* shown again next visit */ } });
+try {
+  if (localStorage.getItem(WHATS_NEW_KEY) !== WHATS_NEW_VERSION) $("whatsnew").showModal();
+} catch (e) { $("whatsnew").showModal(); }
 
 if (typeof Cloud !== "undefined") {
   Cloud.start({
