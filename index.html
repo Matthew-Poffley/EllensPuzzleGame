@@ -38,15 +38,25 @@
     background: linear-gradient(135deg, var(--accent), var(--accent-deep));
     border-radius: 16px; color: #fff;
   }
+  .category .rank {
+    display: inline-block; margin-top: 8px; padding: 3px 12px; border-radius: 999px;
+    font-size: .78rem; font-weight: 700; letter-spacing: .5px;
+    background: rgba(255, 255, 255, .18); color: #fff;
+  }
+  .category .rank[hidden] { display: none; }
+  .category .rank[data-rank="Common"] { background: #25a55f; }
+  .category .rank[data-rank="Obscure"] { background: #e29a00; }
+  .category .rank[data-rank="Niche"] { background: #e8602c; }
+  .category .rank[data-rank="Extremely Esoteric"] { background: #c43d4b; }
   .category small { display: block; opacity: .8; text-transform: uppercase; letter-spacing: 2px; font-size: .68rem; }
-  .category strong { font-size: clamp(1.25rem, 5vw, 1.7rem); }
+  .category strong { display: block; font-size: clamp(1.25rem, 5vw, 1.7rem); }
 
   form { display: flex; gap: 8px; }
-  input[type=text] {
+  input[type=text], input[type=email] {
     flex: 1; min-width: 0; padding: 13px 15px; font-size: 1.05rem; font-family: inherit;
     border: 2px solid var(--line); border-radius: 12px; background: #fff; color: var(--ink); outline: none;
   }
-  input[type=text]:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(108, 76, 245, .15); }
+  input[type=text]:focus, input[type=email]:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(108, 76, 245, .15); }
   button {
     font-family: inherit; font-size: 1rem; cursor: pointer; border: 0; border-radius: 12px;
     padding: 13px 20px; font-weight: 700; background: var(--accent); color: #fff;
@@ -138,7 +148,18 @@
   .entry ol li { display: list-item; padding: 2px 0; margin: 0; background: none; border: 0; font-size: .92rem; }
   .reset { margin-top: 14px; width: 100%; background: transparent; color: #c43d4b; border: 2px solid #f0c3c8; }
   .reset:hover:not(:disabled) { background: #fdeef0; }
+  .dym-options { display: flex; flex-direction: column; gap: 8px; }
+  .dym-options button { text-align: left; }
+  .dym-none { margin-top: 10px; width: 100%; background: transparent; color: var(--ink); border: 2px solid var(--line); }
+  .dym-none:hover:not(:disabled) { background: #f6efdc; }
   .legend { text-align: center; font-size: .75rem; color: var(--muted); margin: 6px 0 0; }
+  .sync { text-align: center; font-size: .75rem; color: var(--muted); margin-top: 4px; min-height: 1.1em; }
+  .sync[data-state="offline"] { color: #c43d4b; }
+  .acct p { color: var(--muted); font-size: .9rem; margin: 8px 0; }
+  .acct h3 { margin: 16px 0 4px; font-size: 1rem; }
+  .acct form { margin-top: 6px; }
+  .acct .note { min-height: 1.3em; font-weight: 600; color: var(--ink); }
+  .acct .note.err { color: #c43d4b; }
   .stats { text-align: center; color: var(--muted); font-size: .85rem; margin-top: 14px; }
 
   @media (max-width: 420px) {
@@ -156,7 +177,7 @@
   </header>
 
   <div class="card">
-    <div class="category"><small id="levelLabel"></small><small>Category</small><strong id="category"></strong></div>
+    <div class="category"><small id="levelLabel"></small><small>Category</small><strong id="category"></strong><span class="rank" id="rank" hidden></span></div>
 
     <form id="form" autocomplete="off">
       <input type="text" id="guess" placeholder="Type your guess…" aria-label="Your guess" autofocus>
@@ -172,13 +193,28 @@
     <p class="legend">The number on each guess is how many places it is from the answer in the category's alphabetical list (1 = right next to it).</p>
 
     <div class="stats" id="stats"></div>
+    <div class="sync" id="sync" aria-live="polite"></div>
     <div class="tools">
       <button type="button" class="hint" id="reveal">Reveal a letter</button>
       <button type="button" id="giveup">Give up</button>
       <button type="button" class="next" id="next" hidden>Next level →</button>
       <button type="button" id="history-btn">History</button>
+      <button type="button" id="acct-btn">☁ Save my progress</button>
+      <button type="button" id="sound-btn" aria-pressed="true">🔊 Sound on</button>
     </div>
   </div>
+
+  <dialog id="dym">
+    <div class="dlg-head"><h2>Did you mean…?</h2></div>
+    <p class="dlg-summary" id="dym-text"></p>
+    <div class="dym-options" id="dym-options"></div>
+    <button type="button" class="dym-none" id="dym-none">None of these</button>
+  </dialog>
+
+  <dialog id="acct" class="acct">
+    <div class="dlg-head"><h2>Your progress</h2><button type="button" class="x" id="close-acct" aria-label="Close">✕</button></div>
+    <div id="acct-body"></div>
+  </dialog>
 
   <dialog id="history">
     <div class="dlg-head"><h2>History</h2><button type="button" class="x" id="close-history" aria-label="Close history">✕</button></div>
@@ -189,6 +225,10 @@
 </main>
 
 <script src="puzzles.js"></script>
+<script src="levels.js"></script>
+<script src="tiers.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="sync.js"></script>
 <script>
 const $ = id => document.getElementById(id);
 const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -196,43 +236,39 @@ const byNorm = (a, b) => norm(a).localeCompare(norm(b));
 
 let level, category, answer, guesses, over, revealed;
 
-// Every player gets the same levels. Each category gets ROUNDS questions with
-// different answers; each round visits every category once, in a shuffled order,
-// before any category comes round again. Seeded random numbers keep it fixed.
-function seeded(seed) {
-  return () => {
-    seed = (seed + 0x6D2B79F5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function shuffled(items, rand) {
-  const a = items.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rand() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
-const ROUNDS = 20;
-const LEVELS = (() => {
-  const cats = Object.keys(PUZZLES);
-  const answers = {};
-  cats.forEach((c, i) => { answers[c] = shuffled(PUZZLES[c], seeded(1000 + i * 131)).slice(0, ROUNDS); });
-  const levels = [];
-  let last = null;
-  for (let r = 0; r < ROUNDS; r++) {
-    const order = shuffled(cats, seeded(2024 + r * 977));
-    if (order[0] === last) [order[0], order[1]] = [order[1], order[0]];
-    order.forEach(c => levels.push({ category: c, answer: answers[c][r] }));
-    last = order[order.length - 1];
-  }
-  return levels;
-})();
+// Every player gets the same levels, fixed in levels.js (never reordered, so
+// saved progress always points at the same puzzle).
+const LEVELS = FROZEN_LEVELS.map(([category, answer]) => ({ category, answer }));
 const TOTAL_LEVELS = LEVELS.length;
+
+// Level ids (positions in LEVELS) never change, because saves refer to them.
+// Retired categories are skipped; the number shown to players counts only the
+// levels still in play.
+const RETIRED = new Set(RETIRED_CATEGORIES);
+const isRetired = n => RETIRED.has(LEVELS[n - 1].category);
+const ACTIVE_TOTAL = LEVELS.filter(l => !RETIRED.has(l.category)).length;
+const displayNum = n => LEVELS.slice(0, n).filter(l => !RETIRED.has(l.category)).length;
+function nextActive(n) {
+  for (let i = Math.max(n, 1); i <= TOTAL_LEVELS; i++) if (!isRetired(i)) return i;
+  return null;
+}
+function lastActive(n) {
+  for (let i = Math.min(n, TOTAL_LEVELS); i >= 1; i--) if (!isRetired(i)) return i;
+  return 1;
+}
+
+// The guessable items for a category, and how well-known each answer is.
+// PUZZLES holds the original full lists; TIERS (tiers.js) groups the trimmed
+// lists by rank. Categories with no tiers (retired ones) use the full list.
+const TIER_ORDER = ["Common", "Obscure", "Niche", "Extremely Esoteric"];
+function playList(cat) {
+  const t = typeof TIERS !== "undefined" && TIERS[cat];
+  return t ? TIER_ORDER.flatMap(r => t[r] || []) : PUZZLES[cat];
+}
+function tierOf(cat, item) {
+  const t = typeof TIERS !== "undefined" && TIERS[cat];
+  return t ? TIER_ORDER.find(r => (t[r] || []).includes(item)) || null : null;
+}
 
 function levelPuzzle(n) {
   return LEVELS[n - 1];
@@ -250,8 +286,14 @@ function loadSave() {
   return { level: 1, current: null, history: [] };
 }
 
-function persist() {
+function persistLocal() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(save)); } catch (e) { /* storage unavailable */ }
+}
+
+// Save on this device, then (shortly after) back up to the player's account.
+function persist() {
+  persistLocal();
+  if (typeof Cloud !== "undefined") Cloud.schedule();
 }
 
 function saveCurrent() {
@@ -261,19 +303,39 @@ function saveCurrent() {
 
 function startLevel(n) {
   level = Math.min(Math.max(n, 1), TOTAL_LEVELS);
+  // A retired category is skipped, unless the player is partway through it:
+  // then they may finish it so no guesses are lost.
+  if (isRetired(level)) {
+    const cur = save.current;
+    const inProgress = cur && cur.level === level && !cur.over && (cur.guesses || []).length;
+    if (!inProgress) {
+      level = nextActive(level) || lastActive(level);
+      if (save.current && save.current.level !== level) save.current = null;
+      save.level = level;
+      persist();
+    }
+  }
   ({ category, answer } = levelPuzzle(level));
   guesses = [];
   revealed = 0;
   over = false;
   const saved = save.current && save.current.level === level ? save.current : null;
   if (saved) {
+    // Check against the ORIGINAL full list, so guesses made before lists were
+    // trimmed are never dropped from a game in progress.
     const valid = new Set(PUZZLES[category].map(norm));
     guesses = (saved.guesses || []).filter(g => valid.has(norm(g)));
     revealed = Math.min(Math.max(saved.revealed | 0, 0), maxReveals());
     over = !!saved.over;
   }
-  $("levelLabel").textContent = `Level ${level} of ${TOTAL_LEVELS}`;
+  $("levelLabel").textContent = isRetired(level)
+    ? "Finishing a retired category"
+    : `Level ${displayNum(level)} of ${ACTIVE_TOTAL}`;
   $("category").textContent = category;
+  const rank = tierOf(category, answer);
+  $("rank").textContent = rank ? `Answer rank: ${rank}` : "";
+  $("rank").hidden = !rank;
+  $("rank").dataset.rank = rank || "";
   $("guess").disabled = $("go").disabled = over;
   $("guess").value = "";
   if (over) {
@@ -353,7 +415,10 @@ function render(latest) {
   ol.innerHTML = "";
 
   // Arrows point toward the answer in the middle.
-  const sorted = PUZZLES[category].slice().sort(byNorm);
+  // (Includes any guess from before trimming, so its distance still works.)
+  const current = playList(category);
+  const extra = guesses.filter(g => !current.includes(g));
+  const sorted = current.concat(extra).sort(byNorm);
   const answerPos = sorted.indexOf(answer);
   const addGuess = (g, cls, arrow) => {
     const li = document.createElement("li");
@@ -391,8 +456,9 @@ function render(latest) {
   $("reveal").disabled = over || revealed >= maxReveals();
   $("giveup").hidden = over;
   $("next").hidden = !over;
-  $("next").disabled = level >= TOTAL_LEVELS;
-  $("next").textContent = level >= TOTAL_LEVELS ? "All levels complete 🎉" : "Next level →";
+  const more = nextActive(level + 1) !== null;
+  $("next").disabled = !more;
+  $("next").textContent = more ? "Next level →" : "All levels complete 🎉";
   renderAlphabet(above, below);
 }
 
@@ -403,7 +469,7 @@ const FILLER = new Set(["and", "the", "of", "a", "an", "in", "on", "to", "for", 
 // Turns what the player typed into a list item. Returns {item} on a match,
 // {maybe: [...]} when several items fit equally well, or {} when nothing fits.
 function resolveGuess(raw) {
-  const list = PUZZLES[category];
+  const list = playList(category);
   const key = norm(raw);
   const byKey = new Map(list.map(i => [norm(i), i]));
   if (byKey.has(key)) return { item: byKey.get(key) };
@@ -423,10 +489,179 @@ function resolveGuess(raw) {
     if (found.length) {
       const fewest = Math.min(...found.map(f => f.parts.length));
       const top = found.filter(f => f.parts.length === fewest).map(f => f.item);
-      return top.length === 1 ? { item: top[0] } : { maybe: top };
+      // Never auto-pick a partial match, even a single one: the player chooses.
+      return { maybe: top };
     }
   }
   return {};
+}
+
+// ---- Celebration: trumpet fanfare + confetti, bigger for harder answers ----
+// power 0..3 follows TIER_ORDER (Common .. Extremely Esoteric).
+const SOUND_KEY = "alphabetLadder.sound"; // separate from the progress save
+let soundOn = true;
+try { soundOn = localStorage.getItem(SOUND_KEY) !== "off"; } catch (e) { /* default on */ }
+let actx = null;
+
+const FANFARES = [
+  [[392, 0, .12], [523.25, .12, .12], [659.25, .24, .5]],
+  [[392, 0, .12], [523.25, .12, .12], [659.25, .24, .12], [783.99, .36, .6]],
+  [[392, 0, .12], [392, .15, .12], [392, .3, .12], [523.25, .45, .35], [659.25, .85, .18],
+   [523.25, 1.05, .12], [659.25, 1.2, .2], [783.99, 1.4, .8], [523.25, 1.4, .8]],
+  [[392, 0, .12], [392, .15, .12], [392, .3, .12], [523.25, .45, .35], [659.25, .85, .18],
+   [523.25, 1.05, .12], [659.25, 1.2, .35], [587.33, 1.6, .15], [659.25, 1.8, .15],
+   [783.99, 2.0, .3], [659.25, 2.4, .15], [783.99, 2.6, .15], [1046.5, 2.8, .3],
+   [523.25, 3.2, 1.6], [659.25, 3.2, 1.6], [783.99, 3.2, 1.6], [1046.5, 3.2, 1.6]]
+];
+
+function trumpet(freq, t0, dur, vol) {
+  const filter = actx.createBiquadFilter();
+  filter.type = "lowpass"; filter.Q.value = 2;
+  filter.frequency.setValueAtTime(freq * 1.2, t0);
+  filter.frequency.linearRampToValueAtTime(freq * 5, t0 + .06);
+  filter.frequency.exponentialRampToValueAtTime(freq * 2.5, t0 + dur);
+  const gain = actx.createGain();
+  gain.gain.setValueAtTime(.0001, t0);
+  gain.gain.exponentialRampToValueAtTime(vol, t0 + .03);
+  gain.gain.setValueAtTime(vol, Math.max(t0 + .03, t0 + dur - .06));
+  gain.gain.exponentialRampToValueAtTime(.0001, t0 + dur);
+  filter.connect(gain); gain.connect(actx.destination);
+  for (const detune of [-6, 6]) {
+    const o = actx.createOscillator();
+    o.type = "sawtooth"; o.frequency.value = freq; o.detune.value = detune;
+    o.connect(filter); o.start(t0); o.stop(t0 + dur + .05);
+  }
+}
+
+function playFanfare(power) {
+  if (!soundOn) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === "suspended") actx.resume();
+    const t = actx.currentTime + .05;
+    const vol = .09 + power * .02;
+    for (const [f, start, dur] of FANFARES[power]) trumpet(f, t + start, dur, vol);
+  } catch (e) { /* no audio available: skip quietly */ }
+}
+
+function audio() {
+  actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+  if (actx.state === "suspended") actx.resume();
+  return actx;
+}
+
+// Sad trombone for giving up: wah, wah, wah, waaaah (last note sags and wobbles).
+function playSad() {
+  if (!soundOn) return;
+  try {
+    audio();
+    const t = actx.currentTime + .05;
+    [[293.66, 0, .42], [277.18, .5, .42], [261.63, 1, .42], [246.94, 1.5, 1.6]].forEach(([f, s, d], i) => {
+      const t0 = t + s, last = i === 3;
+      const filter = actx.createBiquadFilter();
+      filter.type = "lowpass"; filter.Q.value = 4;
+      filter.frequency.setValueAtTime(350, t0);
+      filter.frequency.linearRampToValueAtTime(1400, t0 + d * .35);
+      filter.frequency.linearRampToValueAtTime(400, t0 + d);
+      const gain = actx.createGain();
+      gain.gain.setValueAtTime(.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(.16, t0 + .05);
+      gain.gain.setValueAtTime(.16, t0 + d - .08);
+      gain.gain.exponentialRampToValueAtTime(.0001, t0 + d);
+      filter.connect(gain); gain.connect(actx.destination);
+      const o = actx.createOscillator();
+      o.type = "sawtooth"; o.frequency.setValueAtTime(f, t0);
+      if (last) {
+        o.frequency.setValueAtTime(f, t0 + .5);
+        o.frequency.exponentialRampToValueAtTime(f * .8, t0 + d);
+        const lfo = actx.createOscillator(), depth = actx.createGain();
+        lfo.frequency.value = 6; depth.gain.value = 5;
+        lfo.connect(depth); depth.connect(o.frequency);
+        lfo.start(t0 + .5); lfo.stop(t0 + d + .05);
+      }
+      o.connect(filter); o.start(t0); o.stop(t0 + d + .05);
+    });
+  } catch (e) { /* no audio available: skip quietly */ }
+}
+
+function confetti(power) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const W = innerWidth, H = innerHeight;
+  const cv = document.createElement("canvas");
+  cv.width = W * dpr; cv.height = H * dpr;
+  cv.style.cssText = "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9999";
+  document.body.append(cv);
+  const g = cv.getContext("2d");
+  g.scale(dpr, dpr);
+  const colors = ["#ffc533", "#6c4cf5", "#0f9d8a", "#e8602c", "#ff5fa2", "#4cc3ff", "#ffffff"];
+  const parts = [];
+  const add = (x, y, vx, vy) => parts.push({
+    x, y, vx, vy, w: 6 + Math.random() * 6, h: 4 + Math.random() * 6,
+    rot: Math.random() * 6.28, vr: (Math.random() - .5) * .4,
+    color: colors[Math.floor(Math.random() * colors.length)]
+  });
+  const burst = (x, y, n, angle, spread, speed) => {
+    for (let i = 0; i < n; i++) {
+      const a = angle + (Math.random() - .5) * spread, v = speed * (.45 + Math.random() * .75);
+      add(x, y, Math.cos(a) * v, Math.sin(a) * v);
+    }
+  };
+  const corners = n => { burst(0, H, n, -1.05, .9, 17); burst(W, H, n, -2.09, .9, 17); };
+  const rain = n => { for (let i = 0; i < n; i++) add(Math.random() * W, -20 - Math.random() * 80, (Math.random() - .5) * 2, 2 + Math.random() * 3); };
+  const plans = [
+    [[0, () => corners(60)]],
+    [[0, () => corners(100)], [.4, () => corners(70)]],
+    [[0, () => corners(140)], [.35, () => corners(100)], [.7, () => corners(100)], [.6, () => rain(140)]],
+    [[0, () => corners(200)], [.3, () => corners(160)], [.6, () => corners(160)], [.9, () => corners(160)],
+     [.5, () => burst(W / 2, H * .6, 320, -1.57, 2.6, 22)], [1.2, () => corners(200)],
+     [1.0, () => rain(220)], [1.8, () => rain(220)], [2.6, () => rain(220)], [3.2, () => burst(W / 2, H * .5, 300, -1.57, 6.28, 18)]]
+  ];
+  const events = plans[power].map(([t, fn]) => ({ t, fn, done: false })).sort((a, b) => a.t - b.t);
+  const start = performance.now();
+  let last = start;
+  (function frame(now) {
+    const dt = Math.min((now - last) / 16.67, 3), elapsed = (now - start) / 1000;
+    last = now;
+    for (const e of events) if (!e.done && elapsed >= e.t) { e.done = true; e.fn(); }
+    g.clearRect(0, 0, W, H);
+    for (let i = parts.length - 1; i >= 0; i--) {
+      const p = parts[i];
+      p.vy += .32 * dt; p.vx *= Math.pow(.985, dt); p.vy *= Math.pow(.99, dt);
+      p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+      if (p.y > H + 30) { parts.splice(i, 1); continue; }
+      g.save(); g.translate(p.x, p.y); g.rotate(p.rot);
+      g.fillStyle = p.color; g.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      g.restore();
+    }
+    if ((events.some(e => !e.done) || parts.length) && elapsed < 10) requestAnimationFrame(frame);
+    else cv.remove();
+  })(start);
+}
+
+function celebrate() {
+  const power = Math.max(0, TIER_ORDER.indexOf(tierOf(category, answer)));
+  playFanfare(power);
+  confetti(power);
+}
+
+// Records a guess that is definitely an item of the list.
+function commitGuess(item, raw) {
+  if (over) return;
+  if (guesses.some(g => norm(g) === norm(item))) return setMsg(`You already guessed "${item}".`, true);
+  const note = norm(item) === norm(raw) ? "" : `Counting "${raw}" as ${item}. `;
+  guesses.push(item);
+  saveCurrent();
+  $("guess").value = "";
+  if (norm(item) === norm(answer)) {
+    endGame(true);
+    celebrate();
+    setMsg(`${note}🎉 Got it in ${guesses.length}! It was ${answer}.`);
+    render(item);
+    return;
+  }
+  setMsg(`${note}"${item}" comes ${norm(item) < norm(answer) ? "BEFORE" : "AFTER"} the answer.`);
+  render(item);
 }
 
 $("form").addEventListener("submit", e => {
@@ -435,26 +670,38 @@ $("form").addEventListener("submit", e => {
   const raw = $("guess").value.trim().replace(/\s+/g, " ");
   if (!norm(raw)) return setMsg("Type a guess first.", true);
   const match = resolveGuess(raw);
-  if (match.maybe) {
-    const names = match.maybe.slice(0, 4).map(n => `"${n}"`);
-    return setMsg(`Did you mean ${names.slice(0, -1).join(", ")}${names.length > 1 ? " or " : ""}${names.at(-1)}?`, true);
-  }
+  if (match.maybe) return showDidYouMean(raw, match.maybe);
   if (!match.item) return setMsg(`"${raw}" isn't in this category's list. Try another guess.`, true);
-  const item = match.item;
-  if (guesses.some(g => norm(g) === norm(item))) return setMsg(`You already guessed "${item}".`, true);
-  const note = norm(item) === norm(raw) ? "" : `Counting "${raw}" as ${item}. `;
-  guesses.push(item);
-  saveCurrent();
-  $("guess").value = "";
-  if (norm(item) === norm(answer)) {
-    endGame(true);
-    setMsg(`${note}🎉 Got it in ${guesses.length}! It was ${answer}.`);
-    render(item);
-    return;
-  }
-  setMsg(`${note}"${item}" comes ${norm(item) < norm(answer) ? "BEFORE" : "AFTER"} the answer.`);
-  render(item);
+  commitGuess(match.item, raw);
 });
+
+// "Did you mean" popup. Nothing is recorded unless the player picks an option;
+// "None of these" leaves their typed text and guesses untouched.
+function showDidYouMean(raw, options) {
+  const fresh = options.filter(o => !guesses.some(g => norm(g) === norm(o)));
+  if (!fresh.length) return setMsg(`You already guessed ${options.map(o => `"${o}"`).join(" and ")}.`, true);
+  $("dym-text").textContent = `"${raw}" isn't an exact match. Pick the one you meant — nothing counts as a guess until you choose.`;
+  const box = $("dym-options");
+  box.innerHTML = "";
+  fresh.forEach(o => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = o;
+    b.addEventListener("click", () => {
+      $("dym").close();
+      $("guess").value = "";
+      commitGuess(o, raw);
+    });
+    box.append(b);
+  });
+  $("dym").showModal();
+}
+$("dym-none").addEventListener("click", () => {
+  $("dym").close();
+  setMsg("No guess made. Try rewording it.");
+  $("guess").focus();
+});
+$("dym").addEventListener("cancel", () => setMsg("No guess made. Try rewording it."));
 
 $("reveal").addEventListener("click", () => {
   if (over || revealed >= maxReveals()) return;
@@ -468,13 +715,15 @@ $("reveal").addEventListener("click", () => {
 $("giveup").addEventListener("click", () => {
   if (over) return;
   endGame(false);
+  playSad();
   setMsg(`The answer was ${answer}.`);
   render(null);
 });
 
 $("next").addEventListener("click", () => {
-  if (!over || level >= TOTAL_LEVELS) return;
-  save.level = level + 1;
+  const target = nextActive(level + 1);
+  if (!over || target === null) return;
+  save.level = target;
   save.current = null;
   persist();
   startLevel(save.level);
@@ -512,11 +761,22 @@ function renderHistory() {
   }
   for (const r of rows) {
     const n = r.guesses.length;
-    add(`Level ${r.level} · ${r.category} · ${r.won ? `solved in ${n}` : "gave up"}`, r.won ? "won" : "lost",
+    add(`${isRetired(r.level) ? "Retired" : `Level ${displayNum(r.level)}`} · ${r.category} · ${r.won ? `solved in ${n}` : "gave up"}`, r.won ? "won" : "lost",
       `Answer: ${r.answer}.`, r.guesses,
       ` ${n} guess${n === 1 ? "" : "es"}${r.revealed ? `, ${r.revealed} letter${r.revealed === 1 ? "" : "s"} revealed` : ""}.`);
   }
 }
+
+function showSound() {
+  $("sound-btn").textContent = soundOn ? "🔊 Sound on" : "🔇 Sound off";
+  $("sound-btn").setAttribute("aria-pressed", String(soundOn));
+}
+$("sound-btn").addEventListener("click", () => {
+  soundOn = !soundOn;
+  try { localStorage.setItem(SOUND_KEY, soundOn ? "on" : "off"); } catch (e) { /* not saved */ }
+  showSound();
+});
+showSound();
 
 $("history-btn").addEventListener("click", () => {
   renderHistory();
@@ -525,14 +785,93 @@ $("history-btn").addEventListener("click", () => {
 $("close-history").addEventListener("click", () => $("history").close());
 $("history").addEventListener("click", e => { if (e.target === $("history")) $("history").close(); });
 $("reset").addEventListener("click", () => {
-  if (!confirm("Reset all progress and history in this browser? This can't be undone.")) return;
+  const typed = prompt("This erases ALL your progress and history on this device AND in your saved account. It cannot be undone.\n\nType RESET to confirm.");
+  if (typed === null || typed.trim().toUpperCase() !== "RESET") return;
   save = { level: 1, current: null, history: [] };
-  persist();
+  persistLocal();
+  if (typeof Cloud !== "undefined") Cloud.overwrite(save).catch(() => {});
   $("history").close();
   startLevel(1);
 });
 
+// ---- Cloud saving (Supabase): sync status, account dialog ----
+function setSyncText(state, text) {
+  $("sync").textContent = text ? `☁ ${text}` : "";
+  $("sync").dataset.state = state || "";
+}
+
+// Takes the merged save (this device + account) and, if it moves the player
+// somewhere new, reloads the board. Merging only ever adds progress.
+function adoptMerged(merged) {
+  const levelChanged = merged.level !== level;
+  const cur = merged.current && merged.current.level === level ? merged.current : null;
+  const boardChanged = !!cur && ((cur.guesses || []).length !== guesses.length || !!cur.over !== over);
+  save = merged;
+  persistLocal();
+  if (levelChanged || boardChanged) {
+    startLevel(save.level);
+    setMsg("Welcome back! Your saved progress has been loaded.");
+  }
+}
+
+function showAccount() {
+  const body = $("acct-body");
+  body.innerHTML = "";
+  const add = (tag, text, cls) => { const e = document.createElement(tag); e.textContent = text; if (cls) e.className = cls; body.append(e); return e; };
+  const note = () => add("p", "", "note");
+  const emailForm = (label, handler, doneText) => {
+    const f = document.createElement("form");
+    const i = document.createElement("input");
+    i.type = "email"; i.required = true; i.placeholder = "you@example.com"; i.autocomplete = "email"; i.setAttribute("aria-label", "Email address");
+    const b = document.createElement("button");
+    b.type = "submit"; b.textContent = label;
+    const n = document.createElement("p");
+    n.className = "note";
+    f.append(i, b);
+    f.addEventListener("submit", async e => {
+      e.preventDefault();
+      b.disabled = true; n.className = "note"; n.textContent = "Sending…";
+      try { await handler(i.value.trim()); n.textContent = doneText; }
+      catch (err) { n.className = "note err"; n.textContent = (err && err.message) || "Something went wrong. Please try again."; }
+      b.disabled = false;
+    });
+    body.append(f, n);
+  };
+
+  if (typeof Cloud === "undefined" || !Cloud.user()) {
+    add("p", "Cloud saving isn't available right now. Your progress is still saved on this device.");
+  } else if (!Cloud.isAnonymous()) {
+    add("p", `Signed in as ${Cloud.email()}. Your progress is backed up to your account and follows you to any device you sign in on.`);
+  } else if (!/^https?:$/.test(location.protocol)) {
+    add("p", "Your progress is backed up to an anonymous account on this device. Email sign-in only works once the game is on a website.");
+  } else {
+    add("p", "Your progress is already backed up to an anonymous account on this device. Add your email to keep it if you switch device or clear your browser data. No password needed.");
+    emailForm("Save with my email", e => Cloud.linkEmail(e), "Check your inbox and click the link to finish. Your progress stays exactly as it is.");
+    add("h3", "Already saved your progress on another device?");
+    add("p", "Enter the same email and we'll send a sign-in link. Anything you've done on this device is added to your saved progress, never replaced.");
+    emailForm("Email me a sign-in link", e => Cloud.signInEmail(e), "Check your inbox and click the link to sign in.");
+  }
+}
+
+$("acct-btn").addEventListener("click", () => { showAccount(); $("acct").showModal(); });
+$("close-acct").addEventListener("click", () => $("acct").close());
+$("acct").addEventListener("click", e => { if (e.target === $("acct")) $("acct").close(); });
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden" && typeof Cloud !== "undefined") Cloud.schedule();
+});
+
 startLevel(save.level);
+
+if (typeof Cloud !== "undefined") {
+  Cloud.start({
+    getSave: () => save,
+    adopt: adoptMerged,
+    status: setSyncText,
+    onUser: u => { $("acct-btn").textContent = u && !u.is_anonymous ? "☁ Account" : "☁ Save my progress"; }
+  });
+} else {
+  setSyncText("offline", "Saved on this device only");
+}
 </script>
 </body>
 </html>

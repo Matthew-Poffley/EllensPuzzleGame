@@ -119,3 +119,13 @@ const SYNONYMS = [
   ["Rolls Royce","Rolls"],["Maccies","McDonalds"],["Spuds","Potatoes"],["Tele","Television"]
   ,["Spanner","Wrench"],["Sofa","Settee","Couch"],["Wardrobe","Closet"],["Cot","Crib"],["Bedside table","Nightstand"],["Chest of drawers","Dresser"],["Chopping board","Cutting board"],["Binman","Garbage man"],["Postie","Postman"],["Wellies","Rain boots","Wellingtons"],["Torch","Flashlight"],["Maths","Math"],["Ladybird","Ladybug"],["Sweets","Candy"],["Sulphur","Sulfur"],["Aluminium","Aluminum"],["Grey","Gray"],["Tummy","Belly"],["Trapezium","Trapezoid"],["Hoover","Vacuum cleaner"],["Sat nav","GPS"],["Porridge","Oatmeal"],["Dinner jacket","Tuxedo"],["Vest top","Tank top"],["Cagoule","Windbreaker"],["Playsuit","Romper"],["Boiler suit","Overalls"],["Bobble hat","Beanie"],["Nightie","Nightgown"],["Lace ups","Dress shoes"],["Tube","Subway"],["Double decker","Bus"],["Cockerel","Rooster"],["Bin lorry","Garbage truck"],["Rugby Union","Rugby"],["Rugby League","Rugby"]
 ];
+
+// Categories taken out of play. NEVER delete a category from PUZZLES above: the
+// level order is generated from the full list, so deleting one would reshuffle
+// every level and wreck players' saved progress. Add its name here instead.
+// Retired categories are skipped in play; past results stay in players' history.
+const RETIRED_CATEGORIES = [
+  "Lakes and seas", "Toys", "Classical composers", "Novelists", "Dance styles",
+  "Olympic and track athletes", "Scientists", "Inventors", "Explorers",
+  "Philosophers", "Boats and ships", "Emotions and feelings"
+];
