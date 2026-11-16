@@ -66,7 +66,7 @@ function mergeSaves(a, b) {
 }
 
 const Cloud = (() => {
-  let client = null, user = null, started = false, timer = null, running = false, rerun = false;
+  let lastError = null, client = null, user = null, started = false, timer = null, running = false, rerun = false;
   let hooks = { getSave: () => null, adopt: () => {}, status: () => {}, onUser: () => {} };
 
   const fresh = () => ({ level: 1, current: null, history: [] });
@@ -115,6 +115,7 @@ const Cloud = (() => {
     schedule,
     flush() { clearTimeout(timer); return sync(); },
     user: () => user,
+    lastError: () => lastError,
     isAnonymous: () => !user || !!user.is_anonymous,
     email: () => (user && user.email) || null,
 
@@ -147,6 +148,7 @@ const Cloud = (() => {
         hooks.onUser(user);
         await sync();
       } catch (e) {
+        lastError = (e && e.message) || String(e);
         console.warn("Cloud saving unavailable; using this device only.", e);
         client = null;
         setStatus("offline", "Saved on this device only");

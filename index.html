@@ -224,11 +224,11 @@
   </dialog>
 </main>
 
-<script src="puzzles.js?v=3"></script>
-<script src="levels.js?v=3"></script>
-<script src="tiers.js?v=3"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
-<script src="sync.js?v=3"></script>
+<script src="puzzles.js?v=4"></script>
+<script src="levels.js?v=4"></script>
+<script src="tiers.js?v=4"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.100.0/dist/umd/supabase.min.js"></script>
+<script src="sync.js?v=4"></script>
 <script>
 const $ = id => document.getElementById(id);
 const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -840,6 +840,7 @@ function showAccount() {
 
   if (typeof Cloud === "undefined" || !Cloud.user()) {
     add("p", "Cloud saving isn't available right now. Your progress is still saved on this device.");
+    if (typeof Cloud !== "undefined" && Cloud.lastError()) add("p", "Reason: " + Cloud.lastError());
   } else if (!Cloud.isAnonymous()) {
     add("p", `Signed in as ${Cloud.email()}. Your progress is backed up to your account and follows you to any device you sign in on.`);
   } else if (!/^https?:$/.test(location.protocol)) {
