@@ -34,10 +34,12 @@ revoke all on public.alphabet_ladder_progress from anon, authenticated;
 grant select, insert, update on public.alphabet_ladder_progress to authenticated;
 
 -- ---------------------------------------------------------------------------
--- IMPORTANT, because this project is shared with your party invite:
--- Turning on "anonymous sign-ins" gives every visitor the `authenticated` role.
--- If any party-invite table has a policy written "to authenticated" (or
--- "using (true)"), those anonymous visitors would pass it. Run this to check:
+-- IMPORTANT if this project is shared with another app (e.g. a party invite):
+-- Players here sign up with just an email, so anyone can get the `authenticated`
+-- role. If any other table has a policy written "to authenticated" (or
+-- "using (true)"), those players would pass it. Also, any sign-up trigger on
+-- auth.users that demands an invite will reject game players. Run this to check
+-- the policies:
 --
 --   select schemaname, tablename, policyname, roles, cmd, qual
 --   from pg_policies

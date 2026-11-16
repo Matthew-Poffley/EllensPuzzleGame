@@ -199,7 +199,7 @@
       <button type="button" id="giveup">Give up</button>
       <button type="button" class="next" id="next" hidden>Next level →</button>
       <button type="button" id="history-btn">History</button>
-      <button type="button" id="acct-btn">☁ Save my progress</button>
+      <button type="button" id="acct-btn">☁ Back up my progress</button>
       <button type="button" id="sound-btn" aria-pressed="true">🔊 Sound on</button>
     </div>
   </div>
@@ -224,11 +224,11 @@
   </dialog>
 </main>
 
-<script src="puzzles.js?v=4"></script>
-<script src="levels.js?v=4"></script>
-<script src="tiers.js?v=4"></script>
+<script src="puzzles.js?v=5"></script>
+<script src="levels.js?v=5"></script>
+<script src="tiers.js?v=5"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.100.0/dist/umd/supabase.min.js"></script>
-<script src="sync.js?v=4"></script>
+<script src="sync.js?v=5"></script>
 <script>
 const $ = id => document.getElementById(id);
 const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -838,19 +838,22 @@ function showAccount() {
     body.append(f, n);
   };
 
-  if (typeof Cloud === "undefined" || !Cloud.user()) {
+  if (typeof Cloud === "undefined" || !Cloud.available()) {
     add("p", "Cloud saving isn't available right now. Your progress is still saved on this device.");
     if (typeof Cloud !== "undefined" && Cloud.lastError()) add("p", "Reason: " + Cloud.lastError());
-  } else if (!Cloud.isAnonymous()) {
+  } else if (Cloud.signedIn()) {
     add("p", `Signed in as ${Cloud.email()}. Your progress is backed up to your account and follows you to any device you sign in on.`);
+    const out = document.createElement("button");
+    out.type = "button"; out.className = "reset"; out.textContent = "Sign out (progress stays on this device)";
+    out.style.color = "var(--ink)"; out.style.borderColor = "var(--line)";
+    out.addEventListener("click", async () => { await Cloud.signOut(); showAccount(); });
+    body.append(out);
   } else if (!/^https?:$/.test(location.protocol)) {
-    add("p", "Your progress is backed up to an anonymous account on this device. Email sign-in only works once the game is on a website.");
+    add("p", "Your progress is saved on this device. Backing up with email only works once the game is on a website.");
   } else {
-    add("p", "Your progress is already backed up to an anonymous account on this device. Add your email to keep it if you switch device or clear your browser data. No password needed.");
-    emailForm("Save with my email", e => Cloud.linkEmail(e), "Check your inbox and click the link to finish. Your progress stays exactly as it is.");
-    add("h3", "Already saved your progress on another device?");
-    add("p", "Enter the same email and we'll send a sign-in link. Anything you've done on this device is added to your saved progress, never replaced.");
-    emailForm("Email me a sign-in link", e => Cloud.signInEmail(e), "Check your inbox and click the link to sign in.");
+    add("p", "Your progress is saved on this device. Add your email to back it up, so you keep it if you switch device or clear your browser data. No password needed: we email you a sign-in link.");
+    emailForm("Email me a link", e => Cloud.signIn(e), "Check your inbox and click the link. Your progress is merged into your saved progress, never replaced.");
+    add("p", "Already backed up on another device? Use the same email and we'll bring your progress here.");
   }
 }
 
@@ -868,7 +871,7 @@ if (typeof Cloud !== "undefined") {
     getSave: () => save,
     adopt: adoptMerged,
     status: setSyncText,
-    onUser: u => { $("acct-btn").textContent = u && !u.is_anonymous ? "☁ Account" : "☁ Save my progress"; }
+    onUser: u => { $("acct-btn").textContent = u ? "☁ Account" : "☁ Back up my progress"; }
   });
 } else {
   setSyncText("offline", "Saved on this device only");

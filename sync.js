@@ -1,4 +1,5 @@
-// Cloud saving for Alphabet Ladder (Supabase). The browser's local storage stays
+// Cloud saving for Alphabet Ladder (Supabase). Opt-in: players only get an
+// account when they choose to back up with their email. The browser's local storage stays
 // the primary copy: the game always works offline, and the cloud is a backup that
 // follows the player between devices. Nothing here ever deletes progress except
 // the explicit "Reset progress" action.
@@ -116,7 +117,8 @@ const Cloud = (() => {
     flush() { clearTimeout(timer); return sync(); },
     user: () => user,
     lastError: () => lastError,
-    isAnonymous: () => !user || !!user.is_anonymous,
+    signedIn: () => !!user,
+    available: () => !!client,
     email: () => (user && user.email) || null,
 
     async start(h) {
@@ -138,15 +140,13 @@ const Cloud = (() => {
             if (started && user && changed) sync();
           }, 0);
         });
-        let { data: { session } } = await client.auth.getSession();
-        if (!session) {
-          const res = await client.auth.signInAnonymously();
-          if (res.error) throw res.error;
-          session = res.data.session;
-        }
-        user = session.user;
+        // No account is created automatically. Players are signed in only after
+        // they ask to back up with their email; until then it's this device only.
+        const { data: { session } } = await client.auth.getSession();
+        user = session ? session.user : null;
         hooks.onUser(user);
-        await sync();
+        if (user) await sync();
+        else setStatus("local", "Saved on this device only");
       } catch (e) {
         lastError = (e && e.message) || String(e);
         console.warn("Cloud saving unavailable; using this device only.", e);
@@ -165,21 +165,24 @@ const Cloud = (() => {
       catch (e) { setStatus("offline", "Reset on this device only — couldn't reach your account"); throw e; }
     },
 
-    // Give an anonymous player an email so their progress survives switching
-    // device / clearing the browser. They keep the same account and progress.
-    async linkEmail(email) {
+    // Email a sign-in link. Works for a new player (creates their account) and a
+    // returning one. When they click it, this device's progress is merged into
+    // their account, never replacing it.
+    async signIn(email) {
       if (!client) throw new Error("Cloud saving isn't available right now.");
-      const { error } = await client.auth.updateUser({ email }, { emailRedirectTo: location.origin + location.pathname });
+      const { error } = await client.auth.signInWithOtp({
+        email, options: { shouldCreateUser: true, emailRedirectTo: location.origin + location.pathname }
+      });
       if (error) throw error;
     },
 
-    // Sign in to an account that already has an email (e.g. on a new device).
-    async signInEmail(email) {
-      if (!client) throw new Error("Cloud saving isn't available right now.");
-      const { error } = await client.auth.signInWithOtp({
-        email, options: { shouldCreateUser: false, emailRedirectTo: location.origin + location.pathname }
-      });
-      if (error) throw error;
+    // Sign out of the account. Progress stays on this device.
+    async signOut() {
+      if (!client) return;
+      clearTimeout(timer);
+      await client.auth.signOut();
+      user = null;
+      setStatus("local", "Saved on this device only");
     }
   };
 })();
