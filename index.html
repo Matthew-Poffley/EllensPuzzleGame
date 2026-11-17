@@ -109,6 +109,15 @@
     min-width: 2.2rem; text-align: center; padding: 2px 9px; border-radius: 999px;
     font-size: .85rem; font-weight: 700; background: rgba(255, 255, 255, .75);
   }
+  .tier {
+    padding: 2px 8px; border-radius: 999px; font-size: .68rem; font-weight: 700;
+    letter-spacing: .3px; color: #fff; white-space: nowrap; background: var(--muted);
+  }
+  .tier[data-rank="Common"] { background: #25a55f; }
+  .tier[data-rank="Obscure"] { background: #e29a00; }
+  .tier[data-rank="Niche"] { background: #e8602c; }
+  .tier[data-rank="Extremely Esoteric"] { background: #c43d4b; }
+  .entry ol li .tier { margin-left: 6px; font-size: .62rem; }
   li .arrow { font-size: 1.15rem; font-weight: 700; }
   li.above .arrow { color: var(--above); }
   li.below .arrow { color: var(--below); }
@@ -193,7 +202,7 @@
     <div class="edge-label">Earlier in the alphabet</div>
     <ol id="ladder"></ol>
     <div class="edge-label">Later in the alphabet</div>
-    <p class="legend">The number on each guess is how many places it is from the answer in the category's alphabetical list (1 = right next to it).</p>
+    <p class="legend">The coloured label on each guess shows how well-known that guess is (Common, Obscure, Niche or Extremely Esoteric). The number is how many places it is from the answer in the category's alphabetical list (1 = right next to it).</p>
 
     <div class="stats" id="stats"></div>
     <div class="sync" id="sync" aria-live="polite"></div>
@@ -286,6 +295,18 @@ function playList(cat) {
 function tierOf(cat, item) {
   const t = typeof TIERS !== "undefined" && TIERS[cat];
   return t ? TIER_ORDER.find(r => (t[r] || []).includes(item)) || null : null;
+}
+
+// A small coloured label saying how well-known an item is, or null if unranked.
+function tierBadge(cat, item) {
+  const rank = tierOf(cat, item);
+  if (!rank) return null;
+  const b = document.createElement("span");
+  b.className = "tier";
+  b.dataset.rank = rank;
+  b.textContent = rank;
+  b.title = `Your guess's rank: ${rank}`;
+  return b;
 }
 
 function levelPuzzle(n) {
@@ -452,6 +473,8 @@ function render(latest) {
     n.title = `${steps} place${steps === 1 ? "" : "s"} from the answer in the list`;
     const a = document.createElement("span");
     a.className = "arrow"; a.textContent = arrow; a.setAttribute("aria-hidden", "true");
+    const badge = tierBadge(category, g);
+    if (badge) side.append(badge);
     side.append(n, a);
     li.append(side);
     ol.append(li);
@@ -757,7 +780,7 @@ function renderHistory() {
     : "No finished levels yet.";
   const list = $("history-list");
   list.innerHTML = "";
-  const add = (title, cls, answerText, guessList, extra) => {
+  const add = (title, cls, answerText, guessList, extra, cat) => {
     const d = document.createElement("details");
     d.className = "entry " + cls;
     const s = document.createElement("summary");
@@ -770,19 +793,21 @@ function renderHistory() {
     guessList.forEach(g => {
       const li = document.createElement("li");
       li.textContent = g;
+      const badge = tierBadge(cat, g);
+      if (badge) li.append(badge);
       ol2.append(li);
     });
     d.append(body, ol2);
     list.append(d);
   };
   if (!over && guesses.length) {
-    add(`Level ${level} · ${category} · in progress`, "playing", "Still going. ", guesses, ` ${guesses.length} guess${guesses.length === 1 ? "" : "es"} so far.`);
+    add(`Level ${level} · ${category} · in progress`, "playing", "Still going. ", guesses, ` ${guesses.length} guess${guesses.length === 1 ? "" : "es"} so far.`, category);
   }
   for (const r of rows) {
     const n = r.guesses.length;
     add(`${isRetired(r.level) ? "Retired" : `Level ${displayNum(r.level)}`} · ${r.category} · ${r.won ? `solved in ${n}` : "gave up"}`, r.won ? "won" : "lost",
       `Answer: ${r.answer}.`, r.guesses,
-      ` ${n} guess${n === 1 ? "" : "es"}${r.revealed ? `, ${r.revealed} letter${r.revealed === 1 ? "" : "s"} revealed` : ""}.`);
+      ` ${n} guess${n === 1 ? "" : "es"}${r.revealed ? `, ${r.revealed} letter${r.revealed === 1 ? "" : "s"} revealed` : ""}.`, r.category);
   }
 }
 
